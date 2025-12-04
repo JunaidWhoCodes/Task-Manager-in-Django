@@ -398,6 +398,94 @@ Project-Presentation/
 
 ## 📡 API Endpoints
 
+---
+
+## Data Flow & Key Files (Frontend + Backend)
+
+### Simple ASCII data flow (end-to-end)
+
+Browser / React UI
+  |
+  |  (fetch / POST / PATCH / DELETE)
+  v
+React App (`frontend/src/App.jsx`)
+  |
+  |  (HTTP request to API: `http://localhost:8001/api/tasks/`)
+  v
+Django REST Framework ViewSet (`backend/tasks/views.py`)
+  |
+  |  (uses serializer to convert data)
+  v
+Serializer (`backend/tasks/serializers.py`)
+  |
+  |  (reads/writes data)
+  v
+Model / Database (`backend/tasks/models.py` → SQLite `db.sqlite3`)
+
+Response (JSON) flows back up the same path to React, which calls `setState` and re-renders components.
+
+### Frontend — Main files and their functions
+- `frontend/index.html` — Single HTML page served by Vite; React mounts into the root element.
+- `frontend/src/main.jsx` — React entry point; bootstraps the `App` component.
+- `frontend/src/App.jsx` — Central component: holds `tasks`, `loading`, `error` state; performs `fetch()` calls to the API; passes handlers and data down to child components.
+- `frontend/src/components/AddTaskForm.jsx` — Controlled form component for creating tasks (calls `onAddTask`).
+- `frontend/src/components/TaskList.jsx` — Renders a list of tasks; maps API array to `TaskItem` components.
+- `frontend/src/components/TaskItem.jsx` — Displays a task, checkbox for toggling, and delete button; formats `created_at`.
+- `frontend/src/components/Loading.jsx` & `Error.jsx` — Small UI helpers for UX feedback during network calls or failures.
+
+### Backend — Main files and their functions
+- `backend/tasks/models.py` — `Task` model definition (fields: `title`, `completed`, `created_at`).
+- `backend/tasks/serializers.py` — `TaskSerializer` converts model instances to/from JSON used by the API.
+- `backend/tasks/views.py` — `TaskViewSet` (a DRF `ModelViewSet`) that exposes list/create/retrieve/update/partial_update/destroy endpoints.
+- `backend/tasks/urls.py` — Registers the viewset with a `DefaultRouter`, producing `/api/tasks/` routes.
+- `backend/backend/urls.py` — Project-level URL conf; mounts the app under `path('api/', include('tasks.urls'))`.
+- `backend/backend/settings.py` — Project settings; includes `CORS_ALLOWED_ORIGINS`, `INSTALLED_APPS` (DRF, corsheaders), and `REST_FRAMEWORK` config.
+- `backend/db.sqlite3` (created after migrations) — SQLite database file (data persistence).
+
+### Quick notes for understanding flow during common user actions
+- Load app (initial GET): `App.jsx` calls GET `/api/tasks/` → `TaskViewSet` returns serialized list → `App` sets `tasks` → `TaskList` renders items.
+- Add task: `AddTaskForm` → `App.handleAddTask()` POST `/api/tasks/` → `TaskViewSet` creates Task → response appended to `tasks` state.
+- Toggle task: `TaskItem` checkbox → `App.handleToggleTask()` PATCH `/api/tasks/<id>/` → `TaskViewSet` updates record → `App` updates state.
+- Delete task: `TaskItem` delete → `App.handleDeleteTask()` DELETE `/api/tasks/<id>/` → `TaskViewSet` removes record → `App` filters `tasks` state.
+
+If you want this as a printable one-page summary or a slide-ready markdown (`PRESENTATION.md`), I can extract this section into a separate file and keep `README.md` focused on setup and structure.
+
+**Presentation Questions (Organized by Scope)**
+
+**Pure Frontend Questions**
+- **What React is and why it’s used:** React is a JavaScript library for building user interfaces using components. In this project the React app (in `frontend/`) renders the UI, manages state, and reacts to user actions without reloading the page. **Files:** `frontend/src/App.jsx`, `frontend/src/main.jsx`.
+- **Difference between traditional Django templates and React frontend:** Django templates render HTML on the server for each page load, whereas React builds an SPA that updates the DOM on the client. This project uses Django only as an API (JSON) provider and React for interactive UI. **Files:** `backend/` (templates not used), `frontend/src/*`.
+- **SPA (Single Page Application) concept:** The app loads a single HTML page (`frontend/index.html`) and React updates the view dynamically. Navigation and state changes do not require full page reloads. **Files:** `frontend/index.html`, `frontend/src/App.jsx`.
+- **Virtual DOM and component-based architecture:** React maintains a lightweight Virtual DOM to efficiently update only changed parts of the UI. Components here include `App`, `TaskList`, `TaskItem`, `AddTaskForm`. **Files:** `frontend/src/components/*.jsx`.
+- **How React fetches data using fetch() or Axios:** React uses `fetch()` in `App.jsx` to GET/POST/PATCH/DELETE JSON from the API and then updates component state. **Files:** `frontend/src/App.jsx`, `frontend/src/components/AddTaskForm.jsx`.
+- **Rendering lists & displaying loading/error states:** The UI maps API arrays to components via `.map()` and uses `Loading.jsx`/`Error.jsx` for UX feedback. **Files:** `frontend/src/components/TaskList.jsx`, `frontend/src/components/TaskItem.jsx`, `frontend/src/components/Loading.jsx`, `frontend/src/components/Error.jsx`.
+
+**Frontend + Backend (Both) Questions**
+- **Difference between Django templates and React (context of project):** This is both a frontend design choice and a backend deployment consideration: React handles UI while Django provides JSON APIs. **Files:** `frontend/src/*`, `backend/tasks/views.py`, `backend/tasks/serializers.py`.
+- **How React fetches data → Example flow:** End-to-end: React calls `fetch()` in `App.jsx` → request goes to `/api/tasks/` → DRF `TaskViewSet` handles request → `TaskSerializer` returns JSON → React updates state and renders components. **Files:** `frontend/src/App.jsx` → `backend/tasks/views.py` → `backend/tasks/serializers.py` → `frontend/src/components/TaskList.jsx`.
+- **Handling forms in React and sending POST requests to Django:** Frontend captures input and POSTs JSON to the API; backend validates via serializer and saves to DB. **Files:** `frontend/src/components/AddTaskForm.jsx`, `frontend/src/App.jsx`, `backend/tasks/serializers.py`, `backend/tasks/views.py`.
+- **Consuming a Django REST API in React (lists, components):** Rendering lists (frontend) depends on the API shape provided by DRF (backend). **Files:** `frontend/src/components/TaskList.jsx`, `frontend/src/components/TaskItem.jsx`, `backend/tasks/serializers.py`.
+
+**Pure Backend Questions**
+- **How Django REST Framework exposes APIs for React:** DRF converts `Task` model instances to JSON via `TaskSerializer` and exposes endpoints through `TaskViewSet` and the router. **Files:** `backend/tasks/models.py`, `backend/tasks/serializers.py`, `backend/tasks/views.py`, `backend/tasks/urls.py`, `backend/backend/urls.py`.
+- **Understanding CORS (Cross-Origin Resource Sharing):** CORS is configured in Django settings so the browser will allow the React app (different origin/port) to call the API. **Files:** `backend/backend/settings.py` (`CORS_ALLOWED_ORIGINS`, `corsheaders` in middleware).
+- **Common patterns: Django as backend API:** This pattern is implemented here—Django only serves API endpoints while React serves the UI. **Files:** `backend/tasks/*`, `frontend/*`.
+- **Model → Serializer → View → URL pipeline (how data is served):** The backend pipeline is: `Task` model → `TaskSerializer` → `TaskViewSet` → router (`/api/tasks/`) → JSON response. **Files:** `backend/tasks/models.py`, `backend/tasks/serializers.py`, `backend/tasks/views.py`, `backend/tasks/urls.py`.
+
+**Quick mapping: question → files**
+- **Pure frontend:** `frontend/src/App.jsx`, `frontend/src/main.jsx`, `frontend/src/components/*.jsx`, `frontend/index.html`.
+- **Frontend + backend:** `frontend/src/App.jsx` ↔ `backend/tasks/views.py`, `backend/tasks/serializers.py`, `backend/tasks/models.py`, `backend/backend/settings.py` (CORS).
+- **Pure backend:** `backend/tasks/models.py`, `backend/tasks/serializers.py`, `backend/tasks/views.py`, `backend/tasks/urls.py`, `backend/backend/urls.py`, `backend/backend/settings.py`.
+
+**Group Summary (in project context)**
+- **React role:** UI layer — components, state, fetches API, renders tasks. **Files:** `frontend/src/*`.
+- **Django role:** API layer — stores data, serializes it, and exposes endpoints for React. **Files:** `backend/tasks/*`, `backend/backend/settings.py`.
+- **How they work together:** React (frontend) makes HTTP requests to Django (backend) and consumes JSON to power a responsive SPA. See `frontend/src/App.jsx` for the client flow and `backend/tasks/views.py` + `backend/tasks/serializers.py` for server flow.
+
+If you want, I can also:
+- Add a short ASCII diagram showing the request/response flow.
+- Add a one-page printable summary for your presentation slides.
+
 The Django REST Framework provides the following endpoints:
 
 | Method | Endpoint | Description |
